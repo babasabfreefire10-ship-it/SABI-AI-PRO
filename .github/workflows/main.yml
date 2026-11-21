@@ -1,0 +1,63 @@
+
+name: Build SABI AI PRO IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check ZIP file
+        run: |
+          ls -lah
+          test -f SABI_AI_PRO_TrollStore_CloudBuild.zip
+
+      - name: Extract project
+        run: |
+          mkdir -p source
+          unzip -q SABI_AI_PRO_TrollStore_CloudBuild.zip -d source
+
+      - name: Find Xcode project
+        id: project
+        run: |
+          PROJECT=$(find source -name "SABI_AI_PRO.xcodeproj" -print -quit)
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: Xcode project not found"
+            find source -maxdepth 4 -type f
+            exit 1
+          fi
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+          echo "Found: $PROJECT"
+
+      - name: Build iOS app
+        run: |
+          xcodebuild \
+            -project "${{ steps.project.outputs.project }}" \
+            -scheme SABI_AI_PRO \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=16.0 \
+            build
+
+      - name: Create IPA
+        run: |
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/SABI_AI_PRO.app"
+          test -d "$APP"
+          mkdir -p "$GITHUB_WORKSPACE/Payload"
+          cp -R "$APP" "$GITHUB_WORKSPACE/Payload/"
+          cd "$GITHUB_WORKSPACE"
+          zip -qry SABI_AI_PRO_TrollStore.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SABI-AI-PRO-IPA
+          path: SABI_AI_PRO_TrollStore.ipa
+          if-no-files-found: error
