@@ -1,0 +1,79 @@
+
+name: Build SABI AI PRO IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract project
+        run: |
+          mkdir -p source
+          unzip -q SABI_AI_PRO_TrollStore_CloudBuild.zip -d source
+
+      - name: Find project
+        id: project
+        run: |
+          PROJECT=$(find source -name "SABI_AI_PRO.xcodeproj" -print -quit)
+          if [ -z "$PROJECT" ]; then
+            echo "Xcode project not found"
+            exit 1
+          fi
+          echo "project=$PROJECT" >> "$GITHUB_OUTPUT"
+
+      - name: Build app
+        run: |
+          xcodebuild \
+            -project "${{ steps.project.outputs.project }}" \
+            -scheme SABI_AI_PRO \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            GENERATE_INFOPLIST_FILE=YES \
+            PRODUCT_NAME=SABI_AI_PRO \
+            EXECUTABLE_NAME=SABI_AI_PRO \
+            IPHONEOS_DEPLOYMENT_TARGET=16.0 \
+            build
+
+      - name: Verify and fix app bundle
+        run: |
+          APP="$GITHUB_WORKSPACE/build/Build/Products/Release-iphoneos/SABI_AI_PRO.app"
+          test -d "$APP"
+          echo "App contents:"
+          ls -la "$APP"
+
+          EXEC="$APP/SABI_AI_PRO"
+          if [ ! -f "$EXEC" ]; then
+            echo "Main executable missing"
+            exit 1
+          fi
+
+          chmod +x "$EXEC"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable SABI_AI_PRO" "$APP/Info.plist" || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string SABI_AI_PRO" "$APP/Info.plist"
+
+          /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$APP/Info.plist" || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "$APP/Info.plist"
+
+          plutil -lint "$APP/Info.plist"
+
+      - name: Create IPA
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/SABI_AI_PRO.app Payload/
+          zip -qry SABI_AI_PRO_TrollStore.ipa Payload
+          unzip -l SABI_AI_PRO_TrollStore.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SABI-AI-PRO-IPA
+          path: SABI_AI_PRO_TrollStore.ipa
+          if-no-files-found: error
