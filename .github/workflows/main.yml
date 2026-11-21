@@ -16,17 +16,21 @@ jobs:
         run: |
           unzip -q SABI_AI_PRO_TrollStore_CloudBuild.zip -d source
 
-      - name: Build iOS app
+      - name: Find and build project
         run: |
-          cd source
+          PROJECT=$(find source -name "SABI_AI_PRO.xcodeproj" -print -quit)
+          if [ -z "$PROJECT" ]; then
+            echo "Xcode project not found"
+            exit 1
+          fi
+
           xcodebuild \
-            -project SABI_AI_PRO.xcodeproj \
+            -project "$PROJECT" \
             -scheme SABI_AI_PRO \
             -configuration Release \
             -sdk iphoneos \
-            -derivedDataPath ../build \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
             CODE_SIGNING_ALLOWED=NO \
-            GENERATE_INFOPLIST_FILE=YES \
             IPHONEOS_DEPLOYMENT_TARGET=16.0 \
             build
 
